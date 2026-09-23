@@ -100,22 +100,32 @@
 
   <script>
     const KEYWORDS = ["elektricien","elektra","elektrisch","elektro","e-install","e install","groepenkast","meterkast","aardlek","stopcontact","wandcontact","schakelaar","verlichting","kabel","bekabeling","omvormer","laadpaal","domotica","zwakstroom","sterkstroom","nen 1010","elek."];
-    const PART_GROUPS = [
+    const DEFAULT_GROUPS = [
       { label: "Stopcontacten en schakelaars", items: ["Stopcontact","Dubbel stopcontact","Schakelaar","Wisselschakelaar","Serieschakelaar","Kruisschakelaar","Dimmer","Afdekraam","Blindplaat"] },
       { label: "Dozen", items: ["Inbouwdoos","Hollewanddoos","Centraaldoos","Opbouwdoos"] },
       { label: "Elektra buis", items: ["Buis 16 mm","Buis 19 mm","Bocht","Mof","Zadel","Trekveer"] },
       { label: "Draad en lassen", items: ["VD bruin","VD blauw","VD geel/groen","Lasdop","Wago"] },
       { label: "Verlichting", items: ["Fitting","Snoerpendel","Plafondhaak"] },
     ];
-    const PART_ORDER = PART_GROUPS.flatMap((g) => g.items);
+    const PART_ORDER = () => groups.flatMap((g) => g.items);
     const STORE = "elektra-taken-v1";
+    const CATALOG = "elektra-onderdelen-v1";
     let tasks = load();
+    let groups = loadGroups();
     let partsId = null;
 
     const listEl = document.getElementById("list");
     const sheet = document.getElementById("sheet");
     const panel = document.getElementById("panel");
 
+    function loadGroups() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(CATALOG) || "null");
+        if (Array.isArray(raw) && raw.every((g) => g && typeof g.label === "string" && Array.isArray(g.items))) return raw;
+      } catch { /* standaard */ }
+      return DEFAULT_GROUPS;
+    }
+    function saveGroups() { localStorage.setItem(CATALOG, JSON.stringify(groups)); }
     function load() {
       try { const raw = JSON.parse(localStorage.getItem(STORE) || "[]"); return Array.isArray(raw) ? raw : []; }
       catch { return []; }
@@ -208,7 +218,8 @@
       const totals = {};
       for (const task of withParts) {
         lines.push(task.text);
-        const names = [...PART_ORDER.filter((n) => (task.parts?.[n] || 0) > 0), ...Object.keys(task.parts || {}).filter((n) => (task.parts[n] || 0) > 0 && !PART_ORDER.includes(n))];
+        const order = PART_ORDER();
+        const names = [...order.filter((n) => (task.parts?.[n] || 0) > 0), ...Object.keys(task.parts || {}).filter((n) => (task.parts[n] || 0) > 0 && !order.includes(n))];
         for (const name of names) {
           lines.push("- " + name + ": " + task.parts[name]);
           totals[name] = (totals[name] || 0) + task.parts[name];
@@ -216,7 +227,9 @@
         lines.push("");
       }
       lines.push("Totaal te bestellen");
-      for (const name of PART_ORDER) if (totals[name]) lines.push("- " + name + ": " + totals[name]);
+      const order = PART_ORDER();
+      const extra = Object.keys(totals).filter((name) => !order.includes(name));
+      for (const name of [...order, ...extra]) if (totals[name]) lines.push("- " + name + ": " + totals[name]);
       return lines.join("\n").trim();
     }
 
@@ -250,9 +263,27 @@
           <button type="button" id="x" aria-label="Sluiten">×</button>
         </div>
         <p class="hint" id="partHint"></p>
-        <div id="partGroups"></div>`;
+        <div id="partGroups"></div>
+        <form id="addPart" class="grid2" style="margin-top:1rem">
+          <input id="newPart" type="text" placeholder="Nieuw onderdeel" aria-label="Nieuw onderdeel" style="min-height:48px;border:1px solid var(--line);border-radius:12px;background:var(--bg);padding:.6rem" />
+          <button type="submit" class="primary">Toevoegen</button>
+        </form>`;
       sheet.classList.remove("hidden");
       panel.querySelector("#x").onclick = () => { closeSheet(); render(); };
+      panel.querySelector("#addPart").onsubmit = (event) => {
+        event.preventDefault();
+        const name = panel.querySelector("#newPart").value.replace(/\s+/g, " ").trim();
+        if (!name) return;
+        const exists = groups.some((g) => g.items.some((item) => item.toLowerCase() === name.toLowerCase()));
+        if (!exists) {
+          const own = groups.find((g) => g.label === "Eigen");
+          groups = own
+            ? groups.map((g) => g.label === "Eigen" ? { ...g, items: [...g.items, name] } : g)
+            : [...groups, { label: "Eigen", items: [name] }];
+          saveGroups();
+        }
+        drawParts();
+      };
       drawParts();
     }
 
@@ -260,7 +291,7 @@
       const task = tasks.find((t) => t.id === partsId);
       if (!task) return;
       panel.querySelector("#partHint").textContent = "Tik op een onderdeel. Elke tik is 1 stuk. Totaal " + total(task.parts) + ".";
-      panel.querySelector("#partGroups").innerHTML = PART_GROUPS.map((g) => `
+      panel.querySelector("#partGroups").innerHTML = groups.map((g) => `
         <h3>${esc(g.label)}</h3>
         <div class="grid2">
           ${g.items.map((name) => {
@@ -268,12 +299,29 @@
             return `<div class="part ${n ? "on" : ""}">
               <button type="button" class="add" data-part="${esc(name)}" data-d="1"><span>${esc(name)}</span><span>${n}</span></button>
               ${n ? `<button type="button" class="subbtn" data-part="${esc(name)}" data-d="-1" aria-label="minder">−</button>` : ""}
+              <button type="button" class="subbtn" data-drop="${esc(name)}" aria-label="verwijderen">×</button>
             </div>`;
           }).join("")}
         </div>`).join("");
     }
 
     panel.addEventListener("click", (e) => {
+      const drop = e.target.closest("[data-drop]");
+      if (drop) {
+        const name = drop.dataset.drop;
+        const used = tasks.some((t) => (t.parts?.[name] || 0) > 0);
+        if (used && !confirm(name + " ook van de taken halen?")) return;
+        groups = groups
+          .map((g) => ({ ...g, items: g.items.filter((item) => item !== name) }))
+          .filter((g) => g.items.length || g.label !== "Eigen");
+        saveGroups();
+        if (used) {
+          tasks.forEach((t) => { if (t.parts) delete t.parts[name]; });
+          save();
+        }
+        drawParts();
+        return;
+      }
       const btn = e.target.closest("[data-part]");
       if (!btn || !partsId) return;
       const task = tasks.find((t) => t.id === partsId);
