@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#f4f1ea" />
+  <title>Luut's elektra taken</title>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --surface: #fffcf8;
+      --fg: #1d2430;
+      --muted: #5e6b7a;
+      --primary: #b56a12;
+      --primary-fg: #fff8ee;
+      --ok: #1c7a4d;
+      --line: #e6dfd2;
+      --danger: #a33b3b;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--fg); font-family: "Segoe UI", system-ui, sans-serif; }
+    body { min-height: 100dvh; }
+    main { max-width: 32rem; margin: 0 auto; padding: 1.25rem 1rem 8rem; }
+    h1 { font-family: Georgia, serif; font-size: 1.8rem; line-height: 1.1; margin: 0; }
+    .sub { color: var(--muted); font-size: .92rem; margin: .35rem 0 0; }
+    .row { display: flex; flex-wrap: wrap; gap: .5rem; margin: .9rem 0; }
+    .chip { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: .35rem .75rem; color: var(--muted); font-size: .9rem; }
+    button, .btn {
+      font: inherit; cursor: pointer; border-radius: 12px; min-height: 44px;
+      border: 1px solid var(--line); background: var(--surface); color: var(--fg); font-weight: 650; padding: .55rem .8rem;
+    }
+    .primary { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+    .danger { color: var(--danger); }
+    .muted { color: var(--muted); }
+    .card {
+      display: grid; grid-template-columns: auto 1fr auto; gap: .7rem; align-items: start;
+      background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: .7rem; margin-bottom: .6rem;
+    }
+    .check { width: 44px; height: 44px; border-radius: 12px; }
+    .check.on { background: var(--ok); color: white; border-color: var(--ok); }
+    textarea, input[type=text] {
+      width: 100%; font: inherit; color: inherit; background: transparent; border: 0; resize: none; padding: .2rem;
+    }
+    textarea:focus { outline: none; background: var(--bg); border-radius: 8px; }
+    .name.done { color: var(--muted); text-decoration: line-through; }
+    .meta { color: var(--muted); font-size: .75rem; margin: .2rem 0 .4rem; }
+    .empty { text-align: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 18px; padding: 2.5rem 1rem; background: var(--surface); }
+    .dock {
+      position: fixed; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: 1fr 1fr; gap: .5rem;
+      max-width: 32rem; margin: 0 auto; padding: .6rem 1rem calc(.8rem + env(safe-area-inset-bottom));
+      background: linear-gradient(transparent, var(--bg) 30%);
+    }
+    .dock label { display: flex; align-items: center; justify-content: center; min-height: 48px; border-radius: 16px; font-weight: 700; cursor: pointer; }
+    .file { border: 1px solid var(--line); background: var(--surface); }
+    .cam { background: var(--primary); color: var(--primary-fg); }
+    .sheet { position: fixed; inset: 0; background: rgba(29,36,48,.4); display: flex; align-items: flex-end; z-index: 5; }
+    .panel { width: 100%; max-height: 88dvh; overflow: auto; background: var(--surface); border-radius: 22px 22px 0 0; padding: 1rem 1rem calc(1.2rem + env(safe-area-inset-bottom)); }
+    .hidden { display: none; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+    .part { display: flex; min-height: 48px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); }
+    .part.on { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+    .part button { border: 0; background: transparent; color: inherit; border-radius: 0; }
+    .part .add { flex: 1; display: flex; justify-content: space-between; text-align: left; }
+    .part .subbtn { width: 44px; border-left: 1px solid rgba(255,248,238,.35); }
+    h2 { font-family: Georgia, serif; margin: 0; }
+    h3 { font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin: 1rem 0 .4rem; }
+    pre { white-space: pre-wrap; font: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: .8rem; max-height: 18rem; overflow: auto; }
+    .barwrap { height: 8px; background: var(--bg); border-radius: 99px; overflow: hidden; margin: .6rem 0; }
+    .bar { height: 100%; width: 0; background: var(--primary); }
+    img.preview { width: 100%; max-height: 160px; object-fit: cover; border-radius: 12px; }
+    .hint { color: var(--muted); font-size: .9rem; }
+    a.primary { text-decoration: none; display: flex; align-items: center; justify-content: center; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Luut's elektra taken</h1>
+    <p class="sub">Foto van de papieren lijst. Alleen jouw elektra-klussen.</p>
+    <div class="row">
+      <span class="chip">Open <b id="openCount">0</b></span>
+      <span class="chip">Klaar <b id="doneCount">0</b></span>
+    </div>
+    <div class="row">
+      <button type="button" id="addBtn">+ Taak typen</button>
+      <button type="button" class="muted" id="clearDone">Klaar wissen</button>
+      <button type="button" class="primary" id="bossBtn">Voor de baas</button>
+      <button type="button" class="danger" id="resetBtn">Nieuwe dag</button>
+    </div>
+    <div id="list"></div>
+    <div class="dock">
+      <label class="file">Bestand<input id="fileIn" type="file" accept="image/*" hidden /></label>
+      <label class="cam">Foto maken<input id="camIn" type="file" accept="image/*" capture="environment" hidden /></label>
+    </div>
+  </main>
+
+  <div id="sheet" class="sheet hidden">
+    <div class="panel" id="panel"></div>
+  </div>
+
+  <script>
+    const KEYWORDS = ["elektricien","elektra","elektrisch","elektro","e-install","e install","groepenkast","meterkast","aardlek","stopcontact","wandcontact","schakelaar","verlichting","kabel","bekabeling","omvormer","laadpaal","domotica","zwakstroom","sterkstroom","nen 1010","elek."];
+    const PART_GROUPS = [
+      { label: "Stopcontacten en schakelaars", items: ["Stopcontact","Dubbel stopcontact","Schakelaar","Wisselschakelaar","Serieschakelaar","Kruisschakelaar","Dimmer","Afdekraam","Blindplaat"] },
+      { label: "Dozen", items: ["Inbouwdoos","Hollewanddoos","Centraaldoos","Opbouwdoos"] },
+      { label: "Elektra buis", items: ["Buis 16 mm","Buis 19 mm","Bocht","Mof","Zadel","Trekveer"] },
+      { label: "Draad en lassen", items: ["VD bruin","VD blauw","VD geel/groen","Lasdop","Wago"] },
+      { label: "Verlichting", items: ["Fitting","Snoerpendel","Plafondhaak"] },
+    ];
+    const PART_ORDER = PART_GROUPS.flatMap((g) => g.items);
+    const STORE = "elektra-taken-v1";
+    let tasks = load();
+    let partsId = null;
+
+    const listEl = document.getElementById("list");
+    const sheet = document.getElementById("sheet");
+    const panel = document.getElementById("panel");
+
+    function load() {
+      try { const raw = JSON.parse(localStorage.getItem(STORE) || "[]"); return Array.isArray(raw) ? raw : []; }
+      catch { return []; }
+    }
+    function save() { localStorage.setItem(STORE, JSON.stringify(tasks)); }
+    function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        "&": "\u0026amp;",
+        "<": "\u0026lt;",
+        ">": "\u0026gt;",
+        '"': "\u0026quot;",
+        "'": "\u0026#39;",
+      }[c]));
+    }
+    function total(parts) { return Object.values(parts || {}).reduce((n, v) => n + (v > 0 ? v : 0), 0); }
+
+    function render() {
+      document.getElementById("openCount").textContent = tasks.filter((t) => !t.done).length;
+      document.getElementById("doneCount").textContent = tasks.filter((t) => t.done).length;
+      const sorted = [...tasks].sort((a, b) => Number(a.done) - Number(b.done) || b.created - a.created);
+      if (!sorted.length) {
+        listEl.innerHTML = '<div class="empty">Nog geen taken. Maak een foto van de papieren lijst.</div>';
+        return;
+      }
+      listEl.innerHTML = sorted.map((t) => `
+        <article class="card" data-id="${t.id}">
+          <button type="button" class="check ${t.done ? "on" : ""}" data-act="done" aria-label="Afvinken">${t.done ? "✓" : ""}</button>
+          <div>
+            <textarea class="name ${t.done ? "done" : ""}" rows="2" aria-label="Taaknaam">${esc(t.text)}</textarea>
+            <div class="meta">${esc(t.source)} · ${new Date(t.created).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" })}</div>
+            <button type="button" data-act="parts">Onderdelen${total(t.parts) ? " · " + total(t.parts) : ""}</button>
+          </div>
+          <button type="button" data-act="del" aria-label="Verwijderen">×</button>
+        </article>
+      `).join("");
+    }
+
+    listEl.addEventListener("click", (e) => {
+      const card = e.target.closest(".card");
+      if (!card) return;
+      const task = tasks.find((t) => t.id === card.dataset.id);
+      if (!task) return;
+      const act = e.target.closest("[data-act]")?.dataset.act;
+      if (act === "done") task.done = !task.done;
+      else if (act === "del") tasks = tasks.filter((t) => t.id !== task.id);
+      else if (act === "parts") { partsId = task.id; openParts(); return; }
+      else return;
+      save(); render();
+    });
+
+    listEl.addEventListener("focusout", (e) => {
+      if (!e.target.classList.contains("name")) return;
+      const card = e.target.closest(".card");
+      const task = tasks.find((t) => t.id === card.dataset.id);
+      if (!task) return;
+      const next = e.target.value.replace(/\s+/g, " ").trim();
+      if (next && next !== task.text) { task.text = next; save(); }
+      else e.target.value = task.text;
+    });
+
+    function closeSheet() { sheet.classList.add("hidden"); panel.innerHTML = ""; }
+    sheet.addEventListener("click", (e) => { if (e.target === sheet) closeSheet(); });
+
+    document.getElementById("addBtn").onclick = () => {
+      panel.innerHTML = `
+        <h2>Taak toevoegen</h2>
+        <textarea id="draft" rows="3" placeholder="Bijv. Woning 12, stopcontacten keuken" style="margin-top:.8rem;background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:.7rem"></textarea>
+        <div class="grid2" style="margin-top:.7rem">
+          <button type="button" id="cancel">Annuleren</button>
+          <button type="button" class="primary" id="saveTask">Opslaan</button>
+        </div>`;
+      sheet.classList.remove("hidden");
+      panel.querySelector("#cancel").onclick = closeSheet;
+      panel.querySelector("#saveTask").onclick = () => {
+        const text = panel.querySelector("#draft").value.trim();
+        if (!text) return;
+        tasks.unshift({ id: uid(), text, done: false, created: Date.now(), source: "handmatig" });
+        save(); render(); closeSheet();
+      };
+    };
+
+    document.getElementById("clearDone").onclick = () => { tasks = tasks.filter((t) => !t.done); save(); render(); };
+    document.getElementById("resetBtn").onclick = () => { if (confirm("Alle taken van vandaag wissen?")) { tasks = []; save(); render(); } };
+
+    function orderMessage() {
+      const withParts = tasks.filter((t) => total(t.parts) > 0);
+      if (!withParts.length) return "";
+      const lines = ["Bestelling Luut", ""];
+      const totals = {};
+      for (const task of withParts) {
+        lines.push(task.text);
+        const names = [...PART_ORDER.filter((n) => (task.parts?.[n] || 0) > 0), ...Object.keys(task.parts || {}).filter((n) => (task.parts[n] || 0) > 0 && !PART_ORDER.includes(n))];
+        for (const name of names) {
+          lines.push("- " + name + ": " + task.parts[name]);
+          totals[name] = (totals[name] || 0) + task.parts[name];
+        }
+        lines.push("");
+      }
+      lines.push("Totaal te bestellen");
+      for (const name of PART_ORDER) if (totals[name]) lines.push("- " + name + ": " + totals[name]);
+      return lines.join("\n").trim();
+    }
+
+    document.getElementById("bossBtn").onclick = () => {
+      const text = orderMessage();
+      panel.innerHTML = `
+        <div style="display:flex;justify-content:space-between;gap:.6rem">
+          <div><h2>Voor de baas</h2><p class="hint">Onderdelen per taak, klaar om te bestellen.</p></div>
+          <button type="button" id="x" aria-label="Sluiten">×</button>
+        </div>
+        ${text ? `<pre id="order">${esc(text)}</pre>` : `<p class="empty">Nog geen onderdelen geteld. Tel ze eerst per taak.</p>`}
+        <div class="grid2">
+          <button type="button" id="copy" ${text ? "" : "disabled"}>Kopieer</button>
+          <a class="btn primary" id="tg" ${text ? `href="https://t.me/share/url?text=${encodeURIComponent(text)}" target="_blank" rel="noreferrer"` : ""}>Telegram</a>
+        </div>`;
+      sheet.classList.remove("hidden");
+      panel.querySelector("#x").onclick = closeSheet;
+      const copy = panel.querySelector("#copy");
+      if (copy) copy.onclick = async () => {
+        await navigator.clipboard.writeText(text);
+        copy.textContent = "Gekopieerd";
+      };
+    };
+
+    function openParts() {
+      const task = tasks.find((t) => t.id === partsId);
+      if (!task) return;
+      panel.innerHTML = `
+        <div style="display:flex;justify-content:space-between;gap:.6rem">
+          <div><h2>Onderdelen</h2><p class="hint">${esc(task.text)}</p></div>
+          <button type="button" id="x" aria-label="Sluiten">×</button>
+        </div>
+        <p class="hint" id="partHint"></p>
+        <div id="partGroups"></div>`;
+      sheet.classList.remove("hidden");
+      panel.querySelector("#x").onclick = () => { closeSheet(); render(); };
+      drawParts();
+    }
+
+    function drawParts() {
+      const task = tasks.find((t) => t.id === partsId);
+      if (!task) return;
+      panel.querySelector("#partHint").textContent = "Tik op een onderdeel. Elke tik is 1 stuk. Totaal " + total(task.parts) + ".";
+      panel.querySelector("#partGroups").innerHTML = PART_GROUPS.map((g) => `
+        <h3>${esc(g.label)}</h3>
+        <div class="grid2">
+          ${g.items.map((name) => {
+            const n = task.parts?.[name] || 0;
+            return `<div class="part ${n ? "on" : ""}">
+              <button type="button" class="add" data-part="${esc(name)}" data-d="1"><span>${esc(name)}</span><span>${n}</span></button>
+              ${n ? `<button type="button" class="subbtn" data-part="${esc(name)}" data-d="-1" aria-label="minder">−</button>` : ""}
+            </div>`;
+          }).join("")}
+        </div>`).join("");
+    }
+
+    panel.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-part]");
+      if (!btn || !partsId) return;
+      const task = tasks.find((t) => t.id === partsId);
+      if (!task) return;
+      const name = btn.dataset.part;
+      task.parts = task.parts || {};
+      const value = (task.parts[name] || 0) + Number(btn.dataset.d);
+      if (value <= 0) delete task.parts[name];
+      else task.parts[name] = value;
+      save();
+      drawParts();
+    });
+
+    async function scan(file) {
+      panel.innerHTML = `
+        <div style="display:flex;justify-content:space-between"><h2>Lijst scannen</h2><button type="button" id="x">×</button></div>
+        <p class="hint">Houd de lijst recht en scherp. Herkenning blijft op je telefoon.</p>
+        <img class="preview" alt="Foto" />
+        <div class="barwrap"><div class="bar" id="bar"></div></div>
+        <p class="hint" id="status">Tekst herkennen. De eerste keer kan even duren.</p>
+        <div id="cands"></div>
+        <button type="button" class="primary" id="import" style="width:100%;margin-top:.7rem" disabled>Geselecteerde toevoegen</button>`;
+      sheet.classList.remove("hidden");
+      panel.querySelector("#x").onclick = closeSheet;
+      panel.querySelector("img").src = URL.createObjectURL(file);
+      const status = panel.querySelector("#status");
+      const bar = panel.querySelector("#bar");
+      try {
+        const prepared = await prepareImage(file);
+        const { data } = await Tesseract.recognize(prepared, "nld+eng", {
+          logger: (m) => {
+            if (m.status === "recognizing text") {
+              const p = Math.round((m.progress || 0) * 100);
+              bar.style.width = p + "%";
+              status.textContent = "Lezen… " + p + "%";
+            } else if (m.status) status.textContent = m.status;
+          },
+        });
+        const lines = data.text.split(/\n+/).map((l) => l.replace(/\s+/g, " ").trim()).filter((l) => l.length >= 4 && /[a-zA-Zàáäèéëïóöúü]/i.test(l));
+        const mine = filterMine(lines);
+        const list = mine.length ? mine : lines.filter((l) => l.length > 8).slice(0, 20);
+        status.textContent = mine.length
+          ? mine.length + " elektra-regel(s) gevonden. Vink aan wat klopt."
+          : "Geen duidelijke elektra-markering. Kies zelf de regels die van jou zijn.";
+        panel.querySelector("#cands").innerHTML = list.map((line, i) => `
+          <label style="display:flex;gap:.6rem;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:.7rem;margin-top:.4rem;background:var(--bg)">
+            <input type="checkbox" data-i="${i}" ${mine.length ? "checked" : ""} />
+            <span>${esc(line)}</span>
+          </label>`).join("");
+        const imp = panel.querySelector("#import");
+        imp.disabled = false;
+        imp.onclick = () => {
+          [...panel.querySelectorAll("input[type=checkbox]")].forEach((box, i) => {
+            if (box.checked) tasks.unshift({ id: uid(), text: list[i], done: false, created: Date.now(), source: "scan" });
+          });
+          save(); render(); closeSheet();
+        };
+      } catch (err) {
+        console.error(err);
+        status.textContent = "Scannen mislukt. Probeer een scherpere foto bij beter licht.";
+      }
+    }
+
+    function isMine(line) {
+      const n = line.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      return KEYWORDS.some((k) => n.includes(k));
+    }
+    function filterMine(lines) {
+      const out = [];
+      for (let i = 0; i < lines.length; i++) {
+        if (!isMine(lines[i])) continue;
+        const next = lines[i + 1];
+        if (lines[i].length < 22 && next && !isMine(next) && next.length > 8) { out.push(lines[i] + " — " + next); i++; }
+        else out.push(lines[i]);
+      }
+      return [...new Set(out.map((x) => x.toLowerCase()))].map((k) => out.find((x) => x.toLowerCase() === k));
+    }
+
+    function prepareImage(file) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const maxW = 1600;
+          const scale = img.width > maxW ? maxW / img.width : 1;
+          const canvas = document.createElement("canvas");
+          canvas.width = Math.round(img.width * scale);
+          canvas.height = Math.round(img.height * scale);
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const d = imageData.data;
+          for (let i = 0; i < d.length; i += 4) {
+            const g = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+            const v = g < 140 ? 0 : 255;
+            d[i] = d[i + 1] = d[i + 2] = v;
+          }
+          ctx.putImageData(imageData, 0, 0);
+          resolve(canvas);
+        };
+        img.onerror = () => reject(new Error("foto"));
+        img.src = URL.createObjectURL(file);
+      });
+    }
+
+    document.getElementById("fileIn").onchange = (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) scan(f); };
+    document.getElementById("camIn").onchange = (e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) scan(f); };
+
+    render();
+  </script>
+</body>
+</html>
