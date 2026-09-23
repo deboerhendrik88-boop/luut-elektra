@@ -58,6 +58,7 @@
     .panel { width: 100%; max-height: 88dvh; overflow: auto; background: var(--surface); border-radius: 22px 22px 0 0; padding: 1rem 1rem calc(1.2rem + env(safe-area-inset-bottom)); }
     .hidden { display: none; }
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+    .stack { display: flex; flex-direction: column; gap: .5rem; }
     .part { display: flex; min-height: 48px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); }
     .part.on { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
     .part button { border: 0; background: transparent; color: inherit; border-radius: 0; }
@@ -293,7 +294,7 @@
       panel.querySelector("#partHint").textContent = "Tik op een onderdeel. Elke tik is 1 stuk. Totaal " + total(task.parts) + ".";
       panel.querySelector("#partGroups").innerHTML = groups.map((g) => `
         <h3>${esc(g.label)}</h3>
-        <div class="grid2">
+        <div class="stack">
           ${g.items.map((name) => {
             const n = task.parts?.[name] || 0;
             return `<div class="part ${n ? "on" : ""}">
